@@ -20,8 +20,9 @@ func main() {
 
 	for {
 		command, err := parser.App.Parse(reader.ReadParsed())
-
-		writeAndShutdown(err)
+		if err != nil {
+			panic(err)
+		}
 
 		switch command {
 
@@ -45,7 +46,10 @@ func main() {
 				config, err = keys.GetSshConfig(*parser.AddConnName)
 			}
 
-			writeAndShutdown(err)
+			if err != nil {
+				panic(err)
+			}
+
 			conn, err := commands.AddConnection(*parser.AddConnHost, config)
 
 			if err != nil || conn == nil {
@@ -56,24 +60,9 @@ func main() {
 			fmt.Println("Connection established")
 
 		case parser.StartTransmitting.FullCommand():
-
+			commands.StartTransmitting(sessions)
 			break
 		}
 	}
 }
 
-
-
-
-
-func writeAndShutdown(err error) {
-	// При ошибке просто закрываю приложение, впадлу обрабатывать
-	if err != nil {
-		fmt.Print(err)
-		os.Exit(0)
-	}
-}
-
-///////////////////////////////
-//
-///////////////////////////////

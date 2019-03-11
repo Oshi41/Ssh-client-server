@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 	"fmt"
+	"strconv"
 )
 
 // Создаем ssh-соединение
@@ -19,11 +20,12 @@ func AddConnection(host string, config *ssh.ClientConfig) (*ssh.Client, error) {
 
 	// Используем всегда tcp протокол
 	return ssh.Dial("tcp", host, config)
-
 }
 
 func StartTransmitting(connections []*ssh.Client) {
 	ClearTerminal()
+
+	println("Press Ctrl + C to exit from transmitting mode")
 
 	for {
 		// Считали строку
@@ -66,9 +68,20 @@ func StartTransmitting(connections []*ssh.Client) {
 			}
 		}
 
-		// Прохлдим по всем значениям в мапе
-		for key, value := range mappedResult{
-			fmt.Println(key + " For " + string(len(value)) + " server(s)")
+		// Ответ для одиночного соединения
+		if len(connections) < 2{
+			for key, _:= range mappedResult{
+				fmt.Println(key)
+			}
+		} else {
+			// тут пишем все ответы от всех серверов
+			fmt.Println("responses:")
+
+			// Прохлдим по всем значениям в мапе
+			for key, value := range mappedResult{
+				fmt.Println(key)
+				fmt.Println("For " + strconv.Itoa(len(value)) + " server(s)")
+			}
 		}
 	}
 }
@@ -82,17 +95,23 @@ func runCmd(client *ssh.Client, instructions string) cmdResults {
 	// Открыли сессию
 	session, err := client.NewSession()
 	if err != nil {
-		result.output = err.Error()
+		result.output = "Can't open session: " + err.Error()
 		return result
 	}
 
-	// Сюда пишем ответ
-	var stdoutBuf bytes.Buffer
-	session.Stdout = &stdoutBuf
-	session.Run(instructions)
+	// Сюда пишем ответы
+	var out bytes.Buffer
+	session.Stdout = &out
+	session.Stderr = &out
+
+	err = session.Run(instructions)
 
 	// Записали результат
-	result.output = stdoutBuf.String()
+	result.output = out.String()
+
+	if err != nil{
+		result.output += " " + err.Error()
+	}
 
 	return result
 

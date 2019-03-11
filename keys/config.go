@@ -98,7 +98,7 @@ func callBack(hostname string, remote net.Addr, key ssh.PublicKey) error{
 
 		// Asking user
 		fmt.Println("You want to add server fingerprint (y/n)?")
-		if !strings.Contains("y", reader.Read()){
+		if !strings.Contains(reader.Read(), "y"){
 			return err
 		}
 
