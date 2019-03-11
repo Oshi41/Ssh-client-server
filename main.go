@@ -60,9 +60,8 @@ func main() {
 			fmt.Println("Connection established")
 
 		case parser.StartTransmitting.FullCommand():
-			commands.StartTransmitting(sessions)
+			commands.StartTranslate(sessions)
 			break
 		}
 	}
 }
-

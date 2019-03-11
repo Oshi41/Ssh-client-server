@@ -3,7 +3,9 @@ package reader
 import (
 	"bufio"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 )
 
 var (
@@ -17,11 +19,27 @@ func ReadParsed() []string {
 }
 
 // Считывает строчку из консоли
-func Read() string{
+func Read() string {
 	line, err := reader.ReadString('\n')
-	if err != nil{
+	if err != nil {
 		panic(err)
 	}
 
 	return line
+}
+
+// ожидает ввода CTRL + C
+func IsEscaped() chan bool {
+	c := make(chan os.Signal)
+	result := make(chan bool)
+
+	signal.Notify(c, syscall.SIGINT)
+
+	go func() {
+		<-c
+		result <- true
+		return
+	}()
+
+	return result
 }
