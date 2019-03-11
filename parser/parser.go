@@ -5,7 +5,7 @@ import (
 )
 
 var (
-	App = kingpin.New("SSH-client console application", "Write -help to list all commands")
+	App = kingpin.New("SSH-client console application", "Supported commands: [AddConn] [CloseConn] [RecreateSsh] [StartTransmitting] [Exit]")
 
 	AddConn         = App.Command("AddConn", "Adds a new connection to ssh-server")
 	AddConnHost     = AddConn.Arg("Host", "Address to SSH-server").Required().String()

@@ -1,23 +1,29 @@
 package keys
 
 import (
+	"../reader"
 	"golang.org/x/crypto/ssh"
 	"io/ioutil"
 	"os"
 	"golang.org/x/crypto/ssh/knownhosts"
 	"log"
 	"net"
-	"reflect"
+	"fmt"
+	"strings"
 )
 
 var (
+	// В этой папке будут лежать ключи
 	baseFolder = "./Keyes"
 
-	// Путь к файлам
+	// Путь к приватной части ключа
 	privateKeyFile = baseFolder + "/private.ssh"
+	// Путь к публичной части ключа
 	publicKeyFile  = baseFolder + "/public.ssh"
+	// Путь к истории всех посещаемых хостов
 	knownHosts = baseFolder + "/known_hosts.ssh"
 
+	// Нужно для шифрования
 	bitSize = 4096
 
 	// Флаг лдя разрешений при создании файлов/папок
@@ -36,7 +42,7 @@ func init()  {
 	}
 }
 
-// Содаю подспись для аутентификации.
+// Содаю конфиг клиента для аутентификации из ssh ключа.
 func GetSshConfig(name string) (*ssh.ClientConfig, error) {
 	// Хитровыдуманная проверка, что пути не существует,
 	// четсно стырено
@@ -59,45 +65,42 @@ func GetSshConfig(name string) (*ssh.ClientConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	//hostKeyCallback, err := knownhosts.New(knownHosts)
-	//if err != nil {
-	//	return nil, err
-	//}
-
 	config := &ssh.ClientConfig{
 		User:            name,
 		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		HostKeyCallback: callBack,
 	}
 
 	return config, nil
 }
 
+// Содаю конфиг клиента для аутентификации из логина и пароля.
 func GetPasswordConfig(login string, pass string) (*ssh.ClientConfig, error) {
-	//hostKeyCallback, err := knownhosts.New(knownHosts)
-	//if err != nil {
-	//	return nil, err
-	//}
-
 	config := &ssh.ClientConfig{
 		User:            login,
 		Auth:            []ssh.AuthMethod{ssh.Password(pass)},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		HostKeyCallback: callBack,
 	}
 
 	return config, nil
 }
 
+// функция проверки наличия отпечатка хоста. Если его нет, запрашивает разрещшения пользователя,
+// добавляет хост и пропускает
 func callBack(hostname string, remote net.Addr, key ssh.PublicKey) error{
 	result, err := knownhosts.New(knownHosts)
 	if err != nil{
 		log.Fatal(err)
 	}
 
-	err := result(hostname, remote, key)
+	err = result(hostname, remote, key)
 	if err != nil{
-		// todo Ask User
+
+		// Asking user
+		fmt.Println("You want to add server fingerprint (y/n)?")
+		if !strings.Contains("y", reader.Read()){
+			return err
+		}
 
 		address := make([]string, 1)
 		address = append(address, remote.String())
@@ -115,6 +118,8 @@ func callBack(hostname string, remote net.Addr, key ssh.PublicKey) error{
 		}
 
 	}
+
+	return nil
 
 }
 

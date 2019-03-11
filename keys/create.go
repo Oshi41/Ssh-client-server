@@ -1,7 +1,6 @@
 package keys
 
 import (
-	"os"
 	"log"
 	"crypto/rsa"
 	"crypto/rand"
@@ -32,11 +31,6 @@ func GenerateNew() {
 	}
 
 	err = writeKeyToFile([]byte(publicKeyBytes), publicKeyFile)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-
-	_, err = os.Create(knownHosts)
 	if err != nil {
 		log.Fatal(err.Error())
 	}

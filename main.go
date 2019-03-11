@@ -4,15 +4,14 @@ import (
 	"./commands"
 	"./keys"
 	"./parser"
-	"bufio"
+	"./reader"
 	"fmt"
 	"golang.org/x/crypto/ssh"
 	"os"
-	"strings"
 )
 
 var (
-	sessions = make([]*knownhosts.Session, 0)
+	sessions = make([]*ssh.Client, 0)
 )
 
 func main() {
@@ -20,7 +19,7 @@ func main() {
 	fmt.Println(parser.App.Help)
 
 	for {
-		command, err := parser.App.Parse(readline())
+		command, err := parser.App.Parse(reader.ReadParsed())
 
 		writeAndShutdown(err)
 
@@ -38,7 +37,7 @@ func main() {
 			break
 
 		case parser.AddConn.FullCommand():
-			var config *knownhosts.ClientConfig = nil
+			var config *ssh.ClientConfig
 
 			if *parser.AddConnWithPass {
 				config, err = keys.GetPasswordConfig(*parser.AddConnName, *parser.AddConnPass)
@@ -63,21 +62,9 @@ func main() {
 	}
 }
 
-var (
-	reader = bufio.NewReader(os.Stdin)
-)
 
-func readline() []string {
 
-	rawBytes, err := reader.ReadBytes('\n')
 
-	writeAndShutdown(err)
-
-	// убираем переносы строк
-	splitted := strings.Split(strings.Replace(string(rawBytes), "\n", "", -1), " ")
-
-	return splitted
-}
 
 func writeAndShutdown(err error) {
 	// При ошибке просто закрываю приложение, впадлу обрабатывать
