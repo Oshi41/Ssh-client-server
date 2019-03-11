@@ -2,7 +2,7 @@ package main
 
 import (
 	"./commands"
-	"./crypto"
+	"./keys"
 	"./parser"
 	"bufio"
 	"fmt"
@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	sessions = make([]*ssh.Session, 0)
+	sessions = make([]*knownhosts.Session, 0)
 )
 
 func main() {
@@ -34,16 +34,16 @@ func main() {
 			os.Exit(1)
 
 		case parser.RecreateSsh.FullCommand():
-			crypto.GenerateNew()
+			keys.GenerateNew()
 			break
 
 		case parser.AddConn.FullCommand():
-			var config *ssh.ClientConfig = nil
+			var config *knownhosts.ClientConfig = nil
 
 			if *parser.AddConnWithPass {
-				config, err = crypto.GetPasswordConfig(*parser.AddConnName, *parser.AddConnPass)
+				config, err = keys.GetPasswordConfig(*parser.AddConnName, *parser.AddConnPass)
 			} else {
-				config, err = crypto.GetSshConfig(*parser.AddConnName)
+				config, err = keys.GetSshConfig(*parser.AddConnName)
 			}
 
 			writeAndShutdown(err)
