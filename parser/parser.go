@@ -2,6 +2,7 @@ package parser
 
 import (
 	"gopkg.in/alecthomas/kingpin.v2"
+	"github.com/chzyer/readline"
 )
 
 var (
@@ -22,4 +23,6 @@ var (
 		"Switches console to transmitting commands. Press Shift+C to escape")
 
 	Exit = App.Command("exit", "Exit application")
+
+	completer *readline.PrefixCompleter
 )
