@@ -1,12 +1,14 @@
 package parser
 
 import (
-	"gopkg.in/alecthomas/kingpin.v2"
 	"github.com/chzyer/readline"
+	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 var (
 	App = kingpin.New("SSH-client console application", "Supported commands: [conn] [close] [ssh] [cmd] [exit]")
+
+	Debug = App.Command("debug", "Debug connection")
 
 	AddConn         = App.Command("conn", "Adds a new connection to ssh-server")
 	AddConnHost     = AddConn.Arg("Host", "Address to SSH-server").Required().String()

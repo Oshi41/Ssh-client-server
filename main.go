@@ -26,6 +26,15 @@ func main() {
 
 		switch command {
 
+		////////////////////////
+		// ONLY FOR DEBUG
+		////////////////////////
+		case parser.Debug.FullCommand():
+			config, _ := keys.GetPasswordConfig("iu8_82_14", "1qazXSW@")
+			conn, _ := commands.AddConnection("185.20.227.83:22", config)
+			sessions = append(sessions, conn)
+			commands.StartTranslate(sessions)
+
 		case parser.Exit.FullCommand():
 			for i := 0; i < len(sessions); i++ {
 				sessions[i].Close()

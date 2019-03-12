@@ -9,7 +9,7 @@ import (
 func AddConnection(host string, config *ssh.ClientConfig) (*ssh.Client, error) {
 
 	// default port - 22
-	if !strings.Contains(host, ";") {
+	if !strings.Contains(host, ":") {
 		host += ":22"
 	}
 

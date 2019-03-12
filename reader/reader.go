@@ -28,6 +28,16 @@ func Read() string {
 	return line
 }
 
+// Читает сырые байты
+func ReadBytes() []byte {
+	bytes, err := reader.ReadBytes('\n')
+	if err != nil {
+		panic(err)
+	}
+
+	return bytes
+}
+
 // ожидает ввода CTRL + C
 func IsEscaped() chan bool {
 	c := make(chan os.Signal)

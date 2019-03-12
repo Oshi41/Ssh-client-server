@@ -5,8 +5,9 @@ import (
 	"bytes"
 	"fmt"
 	"golang.org/x/crypto/ssh"
+	"io"
+	"os"
 	"strconv"
-	"time"
 )
 
 type cmdResponse struct {
@@ -19,57 +20,53 @@ func StartTranslate(clients []*ssh.Client) {
 
 	println("Press Ctrl + C to exit from transmitting mode")
 
-	for {
-		// заводим выход из нашего режима
-		escape := reader.IsEscaped()
+	sessions, stdins, stdouts := createAndMapConnections(clients)
 
+	// Копирую вывод в консоль
+	// TODO было бы круто сделать distinct вывод соощбений,а не вываливать все подряд
+	for _, stdout := range stdouts {
+		go io.Copy(os.Stdout, stdout)
+	}
+
+	// заводим выход из нашего режима
+	escape := reader.IsEscaped()
+
+	for {
 		select {
 		// Если натыкаемся на escape-последовательность - выхожим
 		case <-escape:
-			return
+			break
 
 		// Иначе продолжаем работу в обычном режиме
 		default:
-			connections := createAndMapConnections(clients)
+
 			// Считали строку
-			instructions := reader.Read()
+			instructions := reader.ReadBytes()
 
-			buffer := make(chan cmdResponse, 0)
-
-			// Запускаю выполнение в каждом потоке (routine)
-			for key, value := range connections {
-				go func(client *ssh.Client, session *ssh.Session, cmd string) {
-					buffer <- runCmd(client, value, instructions)
-				}(key, value, instructions)
-			}
-
-			// выставим таймаут (5 сек)
-			timeout := time.After(5 * time.Second)
-			results := make([]cmdResponse, 0)
-
-			// Дождались ответа и записали результат
-			select {
-			case response := <-buffer:
-				results = append(results, response)
-
-			case <-timeout:
-				results = append(results, cmdResponse{response: "Time out!"})
-			}
-
-			// Напечатали резльтат
-			fmt.Println(writeMessage(results))
-
-			for _, value := range connections {
-				value.Close()
+			for _, value := range stdins {
+				_, err := fmt.Fprintf(value, "%s", instructions)
+				if err != nil {
+					fmt.Print(err)
+				}
 			}
 		}
 	}
 
+	// В конце закрыли соедиения
+	for _, value := range sessions {
+		value.Close()
+	}
 }
 
 // Возвращает мапу с возможными открытыми ессиями
-func createAndMapConnections(connections []*ssh.Client) map[*ssh.Client]*ssh.Session {
-	result := make(map[*ssh.Client]*ssh.Session)
+func createAndMapConnections(connections []*ssh.Client) (
+	map[*ssh.Client]*ssh.Session,
+	map[*ssh.Client]io.WriteCloser,
+	map[*ssh.Client]io.Reader) {
+
+	sessions := make(map[*ssh.Client]*ssh.Session)
+	writers := make(map[*ssh.Client]io.WriteCloser)
+	readers := make(map[*ssh.Client]io.Reader)
 
 	for _, item := range connections {
 		session, err := item.NewSession()
@@ -77,11 +74,25 @@ func createAndMapConnections(connections []*ssh.Client) map[*ssh.Client]*ssh.Ses
 		if err != nil {
 			fmt.Println("Can't open session with " + item.RemoteAddr().String())
 		} else {
-			result[item] = session
+			writer, err := session.StdinPipe()
+			reader, err := session.StdoutPipe()
+			if err != nil {
+				fmt.Println("Can't open session input pipe " + item.RemoteAddr().String())
+			} else {
+				err = session.Shell()
+				if err != nil {
+					fmt.Println("Can't open shell here - " + item.RemoteAddr().String())
+				} else {
+					// Добавляем и сессию и инпут тут, друг без друга добавлять бесполезно
+					writers[item] = writer
+					readers[item] = reader
+					sessions[item] = session
+				}
+			}
 		}
 	}
 
-	return result
+	return sessions, writers, readers
 }
 
 // Очищаем терминал от истории команд
