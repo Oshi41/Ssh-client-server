@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"golang.org/x/crypto/ssh"
 	"os"
+	"strings"
 )
 
 var (
@@ -39,11 +40,12 @@ func main() {
 			for i := 0; i < len(sessions); i++ {
 				sessions[i].Close()
 			}
-
 			os.Exit(1)
 
 		case parser.RecreateSsh.FullCommand():
+			fmt.Println("Key generating started...")
 			keys.GenerateNew()
+			fmt.Println("New key was generated")
 			break
 
 		case parser.AddConn.FullCommand():
@@ -54,13 +56,11 @@ func main() {
 			} else {
 				config, err = keys.GetSshConfig(*parser.AddConnName)
 			}
-
 			if err != nil {
 				panic(err)
 			}
 
 			conn, err := commands.AddConnection(*parser.AddConnHost, config)
-
 			if err != nil || conn == nil {
 				fmt.Println(err)
 			}
@@ -70,6 +70,28 @@ func main() {
 
 		case parser.StartTransmitting.FullCommand():
 			commands.StartTranslate(sessions)
+			break
+
+		case parser.CloseConn.FullCommand():
+			toRemove := *parser.CloseConnHost
+			clientAddresses := make([]string, 0)
+			deleted := false
+
+			for index, client := range sessions {
+				addr := client.RemoteAddr().String()
+				clientAddresses = append(clientAddresses, addr)
+				if strings.Contains(addr, toRemove) {
+					client.Close()
+					sessions = append(sessions[:index], sessions[index+1:]...)
+					fmt.Println("Client was deleted")
+					deleted = true
+				}
+			}
+
+			if !deleted {
+				fmt.Println("Can't find client ", toRemove, "in current connections:\n", clientAddresses)
+			}
+
 			break
 		}
 	}

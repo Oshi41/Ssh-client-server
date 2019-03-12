@@ -2,30 +2,32 @@ package commands
 
 import (
 	"../reader"
-	"bytes"
 	"fmt"
 	"golang.org/x/crypto/ssh"
 	"io"
 	"os"
-	"strconv"
+	"os/exec"
 )
 
-type cmdResponse struct {
-	client   *ssh.Client
-	response string
+type connectedClient struct {
+	client    *ssh.Client
+	session   *ssh.Session
+	stdin     io.WriteCloser
+	stdout    io.Reader
+	stdoutErr io.Reader
 }
 
 func StartTranslate(clients []*ssh.Client) {
 	clearTerminal()
-
 	println("Press Ctrl + C to exit from transmitting mode")
 
-	sessions, stdins, stdouts := createAndMapConnections(clients)
+	connections := openSessions(clients)
 
 	// Копирую вывод в консоль
 	// TODO было бы круто сделать distinct вывод соощбений,а не вываливать все подряд
-	for _, stdout := range stdouts {
-		go io.Copy(os.Stdout, stdout)
+	for _, session := range connections {
+		go io.Copy(os.Stdout, session.stdout)
+		go io.Copy(os.Stdout, session.stdoutErr)
 	}
 
 	// заводим выход из нашего режима
@@ -33,18 +35,22 @@ func StartTranslate(clients []*ssh.Client) {
 
 	for {
 		select {
-		// Если натыкаемся на escape-последовательность - выхожим
 		case <-escape:
-			break
+			// В конце закрыли соедиения
+			for _, value := range connections {
+				value.session.Close()
+			}
+			fmt.Println("Cancel translation mode")
+			return
 
-		// Иначе продолжаем работу в обычном режиме
 		default:
-
-			// Считали строку
+			// считали строку
 			instructions := reader.ReadBytes()
 
-			for _, value := range stdins {
-				_, err := fmt.Fprintf(value, "%s", instructions)
+			// записали её в подсключения
+			for _, session := range connections {
+				_, err := fmt.Fprintf(session.stdin, "%s", instructions)
+
 				if err != nil {
 					fmt.Print(err)
 				}
@@ -52,104 +58,57 @@ func StartTranslate(clients []*ssh.Client) {
 		}
 	}
 
-	// В конце закрыли соедиения
-	for _, value := range sessions {
-		value.Close()
-	}
 }
 
-// Возвращает мапу с возможными открытыми ессиями
-func createAndMapConnections(connections []*ssh.Client) (
-	map[*ssh.Client]*ssh.Session,
-	map[*ssh.Client]io.WriteCloser,
-	map[*ssh.Client]io.Reader) {
-
-	sessions := make(map[*ssh.Client]*ssh.Session)
-	writers := make(map[*ssh.Client]io.WriteCloser)
-	readers := make(map[*ssh.Client]io.Reader)
+func openSessions(connections []*ssh.Client) []connectedClient {
+	result := make([]connectedClient, 0)
 
 	for _, item := range connections {
-		session, err := item.NewSession()
 
+		addr := item.RemoteAddr().String()
+		session, err := item.NewSession()
 		if err != nil {
-			fmt.Println("Can't open session with " + item.RemoteAddr().String())
-		} else {
-			writer, err := session.StdinPipe()
-			reader, err := session.StdoutPipe()
-			if err != nil {
-				fmt.Println("Can't open session input pipe " + item.RemoteAddr().String())
-			} else {
-				err = session.Shell()
-				if err != nil {
-					fmt.Println("Can't open shell here - " + item.RemoteAddr().String())
-				} else {
-					// Добавляем и сессию и инпут тут, друг без друга добавлять бесполезно
-					writers[item] = writer
-					readers[item] = reader
-					sessions[item] = session
-				}
-			}
+			fmt.Println("Can't start session ", addr)
+			continue
 		}
+		stdin, err := session.StdinPipe()
+		if err != nil {
+			fmt.Println("Can't get standart input ", addr)
+			continue
+		}
+
+		stdout, err := session.StdoutPipe()
+		if err != nil {
+			fmt.Println("Can't get standart output ", addr)
+			continue
+		}
+
+		stdoutErr, err := session.StderrPipe()
+		if err != nil {
+			fmt.Println("Can't get error output ", addr)
+			continue
+		}
+
+		err = session.Shell()
+		if err != nil {
+			fmt.Println("Can't start shell ", addr)
+			continue
+		}
+
+		result = append(result, connectedClient{
+			session:   session,
+			client:    item,
+			stdin:     stdin,
+			stdout:    stdout,
+			stdoutErr: stdoutErr})
 	}
 
-	return sessions, writers, readers
+	return result
 }
 
 // Очищаем терминал от истории команд
 func clearTerminal() {
-
-}
-
-// Выполняет инструкции в заданной сессии. Возвращает клиента для удобства маппирования
-func runCmd(client *ssh.Client, session *ssh.Session, cmd string) cmdResponse {
-	// Сюда пишем ответы
-	var out bytes.Buffer
-	var eOut bytes.Buffer
-
-	session.Stdout = &out
-	session.Stderr = &eOut
-
-	err := session.Run(cmd)
-
-	result := out.String() + " " + eOut.String()
-
-	if err != nil {
-		result += " " + err.Error()
-	}
-
-	return cmdResponse{client, result}
-}
-
-func writeMessage(responses []cmdResponse) string {
-	// переложил по уникальным сообщениям
-	distinctMessages := make(map[string][]*ssh.Client)
-
-	for _, cmd := range responses {
-		clients, ok := distinctMessages[cmd.response]
-
-		if ok {
-			clients = append(clients, cmd.client)
-		} else {
-			clients = append(make([]*ssh.Client, 0), cmd.client)
-		}
-
-		distinctMessages[cmd.response] = clients
-	}
-
-	result := ""
-
-	if len(distinctMessages) == 1 {
-		for key := range distinctMessages {
-			result = key
-		}
-	} else {
-		result += "Responses:\n"
-		for key, value := range distinctMessages {
-			result += key + "\n" + "On " + strconv.Itoa(len(value)) + " connections\n"
-		}
-
-	}
-
-	return result
-
+	cmd := exec.Command("cmd", "/c", "cls")
+	cmd.Stdout = os.Stdout
+	cmd.Run()
 }

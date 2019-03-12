@@ -40,15 +40,13 @@ func ReadBytes() []byte {
 
 // ожидает ввода CTRL + C
 func IsEscaped() chan bool {
-	c := make(chan os.Signal)
 	result := make(chan bool)
 
-	signal.Notify(c, syscall.SIGINT)
-
+	c := make(chan os.Signal, 2)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
 		result <- true
-		return
 	}()
 
 	return result
