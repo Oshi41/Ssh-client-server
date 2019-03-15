@@ -10,6 +10,7 @@ import (
 	"net"
 	"fmt"
 	"strings"
+	"github.com/Oshi41/ssh-keygen"
 )
 
 var (
@@ -42,13 +43,20 @@ func init()  {
 	}
 }
 
+func GenerateNew() error {
+	return ssh_keygen.GenerateNew4096(privateKeyFile, publicKeyFile)
+}
+
 // Содаю конфиг клиента для аутентификации из ssh ключа.
 func GetSshConfig(name string) (*ssh.ClientConfig, error) {
 	// Хитровыдуманная проверка, что пути не существует,
 	// четсно стырено
 	// https://stackoverflow.com/questions/12518876/how-to-check-if-a-file-exists-in-go
 	if _, err := os.Stat(publicKeyFile); os.IsNotExist(err) {
-		GenerateNew()
+		err = GenerateNew()
+		if err != nil{
+			return nil, err
+		}
 	}
 
 	file, err := os.Open(privateKeyFile)
@@ -118,9 +126,13 @@ func callBack(hostname string, remote net.Addr, key ssh.PublicKey) error{
 		}
 
 	}
+	// Ещё раз перечитываю хосты
+	result, err = knownhosts.New(knownHosts)
+	if err != nil{
+		log.Fatal(err)
+	}
 
-	return nil
-
+	return result(hostname, remote, key)
 }
 
 
