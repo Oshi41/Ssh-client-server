@@ -2,15 +2,15 @@ package keys
 
 import (
 	"../reader"
+	"fmt"
+	"github.com/Oshi41/ssh-keygen"
 	"golang.org/x/crypto/ssh"
-	"io/ioutil"
-	"os"
 	"golang.org/x/crypto/ssh/knownhosts"
+	"io/ioutil"
 	"log"
 	"net"
-	"fmt"
+	"os"
 	"strings"
-	"github.com/Oshi41/ssh-keygen"
 )
 
 var (
@@ -20,12 +20,9 @@ var (
 	// Путь к приватной части ключа
 	privateKeyFile = baseFolder + "/private.ssh"
 	// Путь к публичной части ключа
-	publicKeyFile  = baseFolder + "/public.ssh"
+	publicKeyFile = baseFolder + "/public.ssh"
 	// Путь к истории всех посещаемых хостов
 	knownHosts = baseFolder + "/known_hosts.ssh"
-
-	// Нужно для шифрования
-	bitSize = 4096
 
 	// Флаг лдя разрешений при создании файлов/папок
 	perm os.FileMode = 0700
@@ -33,12 +30,12 @@ var (
 
 // Функция инициализации пакета.
 // В ней проверяяю наличие папки + наличие файла known hosts
-func init()  {
-	if _, err := os.Open(baseFolder); os.IsNotExist(err){
+func init() {
+	if _, err := os.Open(baseFolder); os.IsNotExist(err) {
 		os.Mkdir(baseFolder, perm)
 	}
 
-	if _, err := os.Open(knownHosts); os.IsNotExist(err){
+	if _, err := os.Open(knownHosts); os.IsNotExist(err) {
 		os.Create(knownHosts)
 	}
 }
@@ -54,7 +51,7 @@ func GetSshConfig(name string) (*ssh.ClientConfig, error) {
 	// https://stackoverflow.com/questions/12518876/how-to-check-if-a-file-exists-in-go
 	if _, err := os.Stat(publicKeyFile); os.IsNotExist(err) {
 		err = GenerateNew()
-		if err != nil{
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -95,18 +92,18 @@ func GetPasswordConfig(login string, pass string) (*ssh.ClientConfig, error) {
 
 // функция проверки наличия отпечатка хоста. Если его нет, запрашивает разрещшения пользователя,
 // добавляет хост и пропускает
-func callBack(hostname string, remote net.Addr, key ssh.PublicKey) error{
+func callBack(hostname string, remote net.Addr, key ssh.PublicKey) error {
 	result, err := knownhosts.New(knownHosts)
-	if err != nil{
+	if err != nil {
 		log.Fatal(err)
 	}
 
 	err = result(hostname, remote, key)
-	if err != nil{
+	if err != nil {
 
 		// Asking user
 		fmt.Println("You want to add server fingerprint (y/n)?")
-		if !strings.Contains(reader.Read(), "y"){
+		if !strings.Contains(reader.Read(), "y") {
 			return err
 		}
 
@@ -114,13 +111,13 @@ func callBack(hostname string, remote net.Addr, key ssh.PublicKey) error{
 		address = append(address, remote.String())
 
 		file, err := os.OpenFile(knownHosts, os.O_APPEND|os.O_WRONLY, perm)
-		if err != nil{
+		if err != nil {
 			log.Fatal(err)
 		}
 
 		defer file.Close()
 
-		line := knownhosts.Line(address, key)
+		line := knownhosts.Line(address, key) + "\n"
 		if _, err = file.WriteString(line); err != nil {
 			log.Fatal(err)
 		}
@@ -128,12 +125,9 @@ func callBack(hostname string, remote net.Addr, key ssh.PublicKey) error{
 	}
 	// Ещё раз перечитываю хосты
 	result, err = knownhosts.New(knownHosts)
-	if err != nil{
+	if err != nil {
 		log.Fatal(err)
 	}
 
 	return result(hostname, remote, key)
 }
-
-
-

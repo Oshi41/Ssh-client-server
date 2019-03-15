@@ -1,53 +1,68 @@
 package main
 
 import (
-	"io"
+	"github.com/Oshi41/ssh-keygen"
 	"github.com/gliderlabs/ssh"
 	"gopkg.in/alecthomas/kingpin.v2"
+	"io"
 	"log"
+	"os"
 )
 
 var (
+	privateKeyPath = "./auth/private.ssh"
+
 	App = kingpin.New("Simple console ssh-server", "")
 
-	Port  = App.Arg("Port", "Port where server will be hosting").Default("2222").String()
+	Port = App.Arg("Port", "Port where server will be hosting").Default("2222").String()
 
-	UseKey = App.Flag("key", "Tell server that we are using ssh key")
-	UseKeyPath = App.Arg("KeyPath", "Path to private ssh key").String()
+	UseKey = App.Flag("key", "Tell server that we are using ssh key by path - "+privateKeyPath).Default("false").Bool()
 
-	UsePass = App.Flag("pass", "Tell server that we are using login and password fro clients")
-	UsePassPath = App.Arg("PassPath", "Path to stored passwords").String()
-
-	privatePath = "./Keyes/private.ssh"
-	knownhosts = "./Keyes/knownhosts.ssh"
+	UsePass  = App.Flag("withPass", "Tell server that we are using password for clients").Default("false").Bool()
+	Password = App.Arg("pass", "Password to enter to the server").Default("").String()
 )
 
-func main(){
+func main() {
+	_, err := App.Parse(os.Args[1:])
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	server := &ssh.Server{
-		Addr: ":" + *Port,
+		Addr:    ":" + *Port,
 		Handler: sessionHandler,
-		PublicKeyHandler: publicKeyHandler,
-		PasswordHandler: passHandler,
 	}
 
-	// запускаем в отдельном потоке
-	go log.Fatal(server.ListenAndServe())
-}
+	if *UseKey {
+		if _, err := os.Stat(privateKeyPath); os.IsNotExist(err) {
+			err = ssh_keygen.GenerateNew4096(privateKeyPath, "")
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
 
-func sessionHandler(session ssh.Session)  {
-	io.WriteString(session, "Welcome to KsuSSH server, " + session.User())
-}
-
-func publicKeyHandler(ctx ssh.Context, key ssh.PublicKey) bool {
-
-	if UseKey.HasEnvarValue(){
-
+		err := server.SetOption(ssh.HostKeyFile(privateKeyPath))
+		if err != nil {
+			log.Println(err)
+		}
 	}
 
-	return true
+	if *UsePass {
+		err := server.SetOption(ssh.PasswordAuth(passHandler))
+		if err != nil {
+			log.Println(err)
+		}
+	}
+
+	log.Println("Starting ssh-server on port " + string(*Port))
+	log.Fatal(server.ListenAndServe())
 }
 
-func passHandler(ctx ssh.Context, password string) bool {
+func sessionHandler(session ssh.Session) {
+	io.WriteString(session, "Welcome to KsuSSH server, "+session.User()+"\n")
+}
 
-	return true
+func passHandler(_ ssh.Context, password string) bool {
+	result := password == *Password
+	return result
 }
