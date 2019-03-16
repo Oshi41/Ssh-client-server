@@ -7,6 +7,7 @@ import (
 	"./reader"
 	"fmt"
 	"golang.org/x/crypto/ssh"
+	"log"
 	"os"
 	"strings"
 )
@@ -22,7 +23,8 @@ func main() {
 	for {
 		command, err := parser.App.Parse(reader.ReadParsed())
 		if err != nil {
-			panic(err)
+			log.Print(err)
+			continue
 		}
 
 		switch command {
@@ -61,12 +63,12 @@ func main() {
 			}
 
 			conn, err := commands.AddConnection(*parser.AddConnHost, config)
-			if err != nil || conn == nil {
+			if err != nil {
 				fmt.Println(err)
+			} else {
+				sessions = append(sessions, conn)
+				fmt.Println("Connection established")
 			}
-
-			sessions = append(sessions, conn)
-			fmt.Println("Connection established")
 
 		case parser.StartTransmitting.FullCommand():
 			commands.StartTranslate(sessions)
