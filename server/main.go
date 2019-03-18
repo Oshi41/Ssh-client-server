@@ -9,9 +9,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
-	"sync"
 )
 
 var (
@@ -43,6 +41,7 @@ func main() {
 	}
 
 	if _, err := os.Stat(privateKeyPath); os.IsNotExist(err) {
+		log.Println("Starting generating key...")
 		err = ssh_keygen.GenerateNew4096(privateKeyPath, publicKeyPath)
 		if err != nil {
 			log.Fatal(err)
@@ -93,6 +92,7 @@ func sessionHandler(session ssh.Session) {
 }
 
 func passHandler(_ ssh.Context, password string) bool {
+	log.Println("Server pass is " + *Password + "\n Requested is " + password)
 	result := password == *Password
 	return result
 }
@@ -107,19 +107,23 @@ func onSessionRequested(session ssh.Session, requestType string) bool {
 
 // Configuring bash
 func createAndAssociateBash(session ssh.Session) bool {
+
 	var bash *exec.Cmd
 
 	if runtime.GOOS == "windows" {
-		dir := filepath.Dir(os.Args[0])
-		bash = exec.Command("cmd", "/C", "start", dir)
+		bash = exec.Command("cmd")
 	} else {
 		bash = exec.Command("bash")
 	}
 
 	// Prepare teardown function
 	closeFunc := func() {
-		session.Close()
-		_, err := bash.Process.Wait()
+		err := session.Close()
+		if err != nil {
+			log.Println(err)
+		}
+
+		_, err = bash.Process.Wait()
 		if err != nil {
 			log.Printf("Failed to exit bash (%s)", err)
 		}
@@ -143,27 +147,25 @@ func createAndAssociateBash(session ssh.Session) bool {
 		return false
 	}
 
-	// Монитор единоразового выполнения
-	var once sync.Once
-
-	// Читаем и пишем в разных потоках
-	go func() {
-		io.Copy(session, bashOut)
-		io.Copy(session, bashOutErr)
-
-		once.Do(closeFunc)
-	}()
-	go func() {
-		io.Copy(bashIn, session)
-
-		once.Do(closeFunc)
-	}()
+	go io.Copy(bashIn, session)
+	go io.Copy(session, bashOut)
+	go io.Copy(session, bashOutErr)
 
 	err = bash.Start()
 	if err != nil {
 		log.Println(err)
 		return false
 	}
+
+	log.Println("Started command")
+
+	err = bash.Wait()
+	if err != nil {
+		log.Println(err)
+		return false
+	}
+
+	defer closeFunc()
 
 	return true
 }

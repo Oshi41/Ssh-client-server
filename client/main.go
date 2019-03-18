@@ -33,8 +33,8 @@ func main() {
 		// ONLY FOR DEBUG
 		////////////////////////
 		case parser.Debug.FullCommand():
-			config, _ := keys.GetPasswordConfig("iu8_82_14", "1qazXSW@")
-			conn, _ := commands.AddConnection("185.20.227.83:22", config)
+			config, _ := keys.GetPasswordConfig("iu8_82_14", "bar")
+			conn, _ := commands.AddConnection("185.20.227.83:2222", config)
 			sessions = append(sessions, conn)
 			commands.StartTranslate(sessions)
 
