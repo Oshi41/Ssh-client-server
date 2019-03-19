@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"log"
+	"os/signal"
 )
 
 type connectedClient struct {
@@ -31,7 +33,8 @@ func StartTranslate(clients []*ssh.Client) {
 	}
 
 	// заводим выход из нашего режима
-	escape := reader.IsEscaped()
+	escape := make(chan os.Signal, 1)
+	signal.Notify(escape, os.Interrupt)
 
 	for {
 		select {
@@ -89,9 +92,25 @@ func openSessions(connections []*ssh.Client) []connectedClient {
 			continue
 		}
 
-		err = session.Shell()
-		if err != nil {
-			fmt.Println("Can't start shell ", addr)
+		// Set up terminal modes
+		// https://net-ssh.github.io/net-ssh/classes/Net/SSH/Connection/Term.html
+		// https://www.ietf.org/rfc/rfc4254.txt
+		// https://godoc.org/golang.org/x/crypto/ssh
+		// THIS IS THE TITLE
+		// https://pythonhosted.org/ANSIColors-balises/ANSIColors.html
+		modes := ssh.TerminalModes{
+			ssh.ECHO:  0, // Disable echoing
+			ssh.IGNCR: 1, // Ignore CR on input.
+		}
+
+		if err := session.RequestPty("vt100", 80, 40, modes); err != nil {
+			log.Println("request for pseudo terminal failed: %s", err)
+			continue
+		}
+
+		// Start remote shell
+		if err := session.Shell(); err != nil {
+			log.Println("failed to start shell: %s", err)
 			continue
 		}
 
