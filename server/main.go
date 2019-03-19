@@ -8,8 +8,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"os/exec"
-	"runtime"
 )
 
 var (
@@ -37,7 +35,6 @@ func main() {
 	server = &ssh.Server{
 		Addr:                   ":" + *Port,
 		Handler:                sessionHandler,
-		SessionRequestCallback: onSessionRequested,
 	}
 
 	if _, err := os.Stat(privateKeyPath); os.IsNotExist(err) {
@@ -71,7 +68,7 @@ func main() {
 	log.Fatal(server.ListenAndServe())
 }
 
-func keyHandler(ctx ssh.Context, key ssh.PublicKey) bool {
+func keyHandler(_ ssh.Context, key ssh.PublicKey) bool {
 	file, err := ioutil.ReadFile(privateKeyPath)
 	if err != nil {
 		log.Fatalln(err)
@@ -95,77 +92,4 @@ func passHandler(_ ssh.Context, password string) bool {
 	log.Println("Server pass is " + *Password + "\n Requested is " + password)
 	result := password == *Password
 	return result
-}
-
-func onSessionRequested(session ssh.Session, requestType string) bool {
-	if requestType == "shell" {
-		return createAndAssociateBash(session)
-	}
-
-	return false
-}
-
-// Configuring bash
-func createAndAssociateBash(session ssh.Session) bool {
-
-	var bash *exec.Cmd
-
-	if runtime.GOOS == "windows" {
-		bash = exec.Command("cmd")
-	} else {
-		bash = exec.Command("bash")
-	}
-
-	// Prepare teardown function
-	closeFunc := func() {
-		err := session.Close()
-		if err != nil {
-			log.Println(err)
-		}
-
-		_, err = bash.Process.Wait()
-		if err != nil {
-			log.Printf("Failed to exit bash (%s)", err)
-		}
-
-		log.Printf("Session closed")
-	}
-
-	bashOut, err := bash.StdoutPipe()
-	if err != nil {
-		log.Println(err)
-		return false
-	}
-	bashOutErr, err := bash.StderrPipe()
-	if err != nil {
-		log.Println(err)
-		return false
-	}
-	bashIn, err := bash.StdinPipe()
-	if err != nil {
-		log.Println(err)
-		return false
-	}
-
-	go io.Copy(bashIn, session)
-	go io.Copy(session, bashOut)
-	go io.Copy(session, bashOutErr)
-
-	err = bash.Start()
-	if err != nil {
-		log.Println(err)
-		return false
-	}
-
-	log.Println("Started command")
-
-	err = bash.Wait()
-	if err != nil {
-		log.Println(err)
-		return false
-	}
-
-	defer closeFunc()
-
-	return true
 }

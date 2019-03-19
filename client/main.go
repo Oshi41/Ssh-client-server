@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	sessions = make([]*ssh.Client, 0)
+	sessions = make([]string, 0)
 )
 
 func main() {
@@ -33,15 +33,11 @@ func main() {
 		// ONLY FOR DEBUG
 		////////////////////////
 		case parser.Debug.FullCommand():
-			config, _ := keys.GetPasswordConfig("iu8_82_14", "bar")
-			conn, _ := commands.AddConnection("185.20.227.83:2222", config)
-			sessions = append(sessions, conn)
-			commands.StartTranslate(sessions)
+			config, _ := keys.GetPasswordConfig("iu8_82_14", "1qazXSW@")
+			sessions = append(sessions, "185.20.227.83:22")
+			commands.StartTranslate(sessions, config)
 
 		case parser.Exit.FullCommand():
-			for i := 0; i < len(sessions); i++ {
-				sessions[i].Close()
-			}
 			os.Exit(1)
 
 		case parser.RecreateSsh.FullCommand():
@@ -51,6 +47,17 @@ func main() {
 			break
 
 		case parser.AddConn.FullCommand():
+			addr := *parser.AddConnHost
+
+			if !strings.Contains(addr, ":"){
+				addr += ":22"
+			}
+
+			sessions = append(sessions, addr)
+
+			log.Println("Total connections - ", len(sessions))
+
+		case parser.StartTransmitting.FullCommand():
 			var config *ssh.ClientConfig
 
 			if *parser.AddConnWithPass {
@@ -58,20 +65,13 @@ func main() {
 			} else {
 				config, err = keys.GetSshConfig(*parser.AddConnName)
 			}
-			if err != nil {
-				panic(err)
-			}
 
-			conn, err := commands.AddConnection(*parser.AddConnHost, config)
 			if err != nil {
-				fmt.Println(err)
+				log.Println("ERROR\n", err)
 			} else {
-				sessions = append(sessions, conn)
-				fmt.Println("Connection established")
+				commands.StartTranslate(sessions, config)
 			}
 
-		case parser.StartTransmitting.FullCommand():
-			commands.StartTranslate(sessions)
 			break
 
 		case parser.CloseConn.FullCommand():
@@ -80,12 +80,10 @@ func main() {
 			deleted := false
 
 			for index, client := range sessions {
-				addr := client.RemoteAddr().String()
-				clientAddresses = append(clientAddresses, addr)
-				if strings.Contains(addr, toRemove) {
-					client.Close()
+				clientAddresses = append(clientAddresses, client)
+				if strings.Contains(client, toRemove) {
 					sessions = append(sessions[:index], sessions[index+1:]...)
-					fmt.Println("Client was deleted")
+					fmt.Println("Client was deleted - ", client)
 					deleted = true
 				}
 			}

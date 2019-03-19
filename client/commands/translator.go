@@ -19,7 +19,32 @@ type connectedClient struct {
 	stdoutErr io.Reader
 }
 
-func StartTranslate(clients []*ssh.Client) {
+// Сюда передаю список адресов, куда буду транслировать команды
+func StartTranslate(addresses [] string, config *ssh.ClientConfig)  {
+	connections := make([] *ssh.Client, 0)
+	for _, addr := range addresses {
+		client, err := ssh.Dial("tcp", addr, config)
+		if err != nil{
+			log.Println(err)
+			continue
+		}
+
+		connections = append(connections, client)
+	}
+
+	if len(connections) > 0{
+		startTranslateInner(connections)
+	} else {
+		log.Println("No available connections")
+		return
+	}
+
+	for _, con := range connections{
+		con.Close()
+	}
+}
+
+func startTranslateInner(clients []*ssh.Client) {
 	clearTerminal()
 	println("Press Ctrl + C to exit from transmitting mode")
 
