@@ -4,10 +4,18 @@ import (
 	"github.com/Oshi41/ssh-keygen"
 	"github.com/gliderlabs/ssh"
 	"gopkg.in/alecthomas/kingpin.v2"
-	"io"
-	"io/ioutil"
 	"log"
 	"os"
+	"net"
+	"io/ioutil"
+	"os/exec"
+	"fmt"
+	"github.com/kr/pty"
+	"io"
+	"syscall"
+	"unsafe"
+	"runtime"
+	"os/user"
 )
 
 var (
@@ -20,8 +28,8 @@ var (
 
 	UseKey = App.Flag("key", "Tell server that we are using ssh key by path - "+privateKeyPath).Default("false").Bool()
 
-	UsePass  = App.Flag("withPass", "Tell server that we are using password for clients").Default("false").Bool()
-	Password = App.Arg("pass", "Password to enter to the server").Default("").String()
+	UsePass = App.Flag("withPass", "Tell server that we are using password for clients").Default("true").Bool()
+	SshPassword = App.Arg("pass", "Password for ssh-session authentification").Default("1qazXSW@").String()
 
 	server *ssh.Server
 )
@@ -33,8 +41,12 @@ func main() {
 	}
 
 	server = &ssh.Server{
-		Addr:                   ":" + *Port,
-		Handler:                sessionHandler,
+		Addr:         ":" + *Port,
+		ConnCallback: greetingHandler,
+	}
+
+	if runtime.GOOS == "linux" {
+		server.Handler = linuxSessionHandler
 	}
 
 	if _, err := os.Stat(privateKeyPath); os.IsNotExist(err) {
@@ -64,8 +76,41 @@ func main() {
 		}
 	}
 
-	log.Println("Starting ssh-server on port " + string(*Port))
+	log.Println("Starting ssh-server on port ", *Port)
 	log.Fatal(server.ListenAndServe())
+}
+
+func greetingHandler(conn net.Conn) net.Conn {
+
+	conn.Write([] byte("Welcome to KsuSSH server!\n"))
+
+	return conn
+}
+
+func linuxSessionHandler(s ssh.Session) {
+	cmd := exec.Command("bash")
+	ptyReq, winCh, isPty := s.Pty()
+	if isPty {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("TERM=%s", ptyReq.Term))
+		f, err := pty.Start(cmd)
+		if err != nil {
+			panic(err)
+		}
+
+		go func() {
+			// Выще хз что это, работает - не трож!!!
+			for win := range winCh {
+				syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), uintptr(syscall.TIOCSWINSZ),
+					uintptr(unsafe.Pointer(&struct{ h, w, x, y uint16 }{uint16(win.Height), uint16(win.Width), 0, 0})))
+			}
+		}()
+
+		go func() {
+			io.Copy(f, s) // stdin
+		}()
+
+		io.Copy(s, f) // stdout
+	}
 }
 
 func keyHandler(_ ssh.Context, key ssh.PublicKey) bool {
@@ -84,12 +129,22 @@ func keyHandler(_ ssh.Context, key ssh.PublicKey) bool {
 	return ssh.KeysEqual(serverKey, key)
 }
 
-func sessionHandler(session ssh.Session) {
-	io.WriteString(session, "Welcome to KsuSSH server, "+session.User()+"\n")
-}
+func passHandler(context ssh.Context, password string) bool {
+	currentUser, err := user.Current()
+	if err != nil {
+		log.Println(err)
+		return false
+	}
 
-func passHandler(_ ssh.Context, password string) bool {
-	log.Println("Server pass is " + *Password + "\n Requested is " + password)
-	result := password == *Password
-	return result
+	if context.User() != currentUser.Name {
+		log.Println("Wrong username - ", context.User())
+		return false
+	}
+
+	if *SshPassword != password{
+		log.Println("Wrong password")
+		return false
+	}
+
+	return true
 }

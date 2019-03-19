@@ -34,7 +34,7 @@ func main() {
 		////////////////////////
 		case parser.Debug.FullCommand():
 			config, _ := keys.GetPasswordConfig("iu8_82_14", "1qazXSW@")
-			sessions = append(sessions, "185.20.227.83:22")
+			sessions = append(sessions, "185.20.227.83:2222")
 			commands.StartTranslate(sessions, config)
 
 		case parser.Exit.FullCommand():
