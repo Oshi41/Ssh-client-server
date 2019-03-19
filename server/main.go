@@ -136,8 +136,8 @@ func passHandler(context ssh.Context, password string) bool {
 		return false
 	}
 
-	if context.User() != currentUser.Name {
-		log.Println("Wrong username - ", context.User())
+	if context.User() != currentUser.Username {
+		log.Println("Requested - ",context.User() , " but should - ", currentUser.Username)
 		return false
 	}
 
