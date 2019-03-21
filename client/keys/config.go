@@ -44,8 +44,16 @@ func GenerateNew() error {
 	return ssh_keygen.GenerateNew4096(privateKeyFile, publicKeyFile)
 }
 
+func GetSshConfig(isPass bool, login, pass string) (*ssh.ClientConfig, error) {
+	if isPass {
+		return getPassConfig(login, pass)
+	}
+
+	return getKeyConfig(login)
+}
+
 // Содаю конфиг клиента для аутентификации из ssh ключа.
-func GetSshConfig(name string) (*ssh.ClientConfig, error) {
+func getKeyConfig(name string) (*ssh.ClientConfig, error) {
 	// Хитровыдуманная проверка, что пути не существует,
 	// четсно стырено
 	// https://stackoverflow.com/questions/12518876/how-to-check-if-a-file-exists-in-go
@@ -80,7 +88,7 @@ func GetSshConfig(name string) (*ssh.ClientConfig, error) {
 }
 
 // Содаю конфиг клиента для аутентификации из логина и пароля.
-func GetPasswordConfig(login string, pass string) (*ssh.ClientConfig, error) {
+func getPassConfig(login string, pass string) (*ssh.ClientConfig, error) {
 	config := &ssh.ClientConfig{
 		User:            login,
 		Auth:            []ssh.AuthMethod{ssh.Password(pass)},

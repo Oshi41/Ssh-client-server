@@ -10,9 +10,16 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync"
 )
 
 var (
+	// Список всех доступных подключений
+	clients = make([]*ssh.Client, 0)
+
+	// синхронизатор для добавления
+	waitGroup sync.WaitGroup
+
 	sessions = make([]string, 0)
 )
 
@@ -29,69 +36,85 @@ func main() {
 
 		switch command {
 
-		////////////////////////
-		// ONLY FOR DEBUG
-		////////////////////////
-		case parser.Debug.FullCommand():
-			config, _ := keys.GetPasswordConfig("iu8_82_14", "1qazXSW@")
-			sessions = append(sessions, "185.20.227.83:2222")
-			commands.StartTranslate(sessions, config)
-
 		case parser.Exit.FullCommand():
 			os.Exit(1)
 
 		case parser.RecreateSsh.FullCommand():
 			fmt.Println("Key generating started...")
-			keys.GenerateNew()
-			fmt.Println("New key was generated")
-			break
-
-		case parser.AddConn.FullCommand():
-			addr := *parser.AddConnHost
-
-			if !strings.Contains(addr, ":"){
-				addr += ":22"
-			}
-
-			sessions = append(sessions, addr)
-
-			log.Println("Total connections - ", len(sessions))
-
-		case parser.StartTransmitting.FullCommand():
-			var config *ssh.ClientConfig
-
-			if *parser.AddConnWithPass {
-				config, err = keys.GetPasswordConfig(*parser.AddConnName, *parser.AddConnPass)
-			} else {
-				config, err = keys.GetSshConfig(*parser.AddConnName)
-			}
+			err := keys.GenerateNew()
 
 			if err != nil {
-				log.Println("ERROR\n", err)
+				log.Println(err)
 			} else {
-				commands.StartTranslate(sessions, config)
+				fmt.Println("New key was generated")
 			}
-
 			break
 
 		case parser.CloseConn.FullCommand():
 			toRemove := *parser.CloseConnHost
-			clientAddresses := make([]string, 0)
-			deleted := false
+			// Удаляю как по имени, так и по адресу
+			for _, value := range clients {
+				if strings.Contains(value.RemoteAddr().String(), toRemove) {
+					closeConn(value)
+				}
 
-			for index, client := range sessions {
-				clientAddresses = append(clientAddresses, client)
-				if strings.Contains(client, toRemove) {
-					sessions = append(sessions[:index], sessions[index+1:]...)
-					fmt.Println("Client was deleted - ", client)
-					deleted = true
+				if strings.Contains(value.User(), toRemove) {
+					closeConn(value)
 				}
 			}
 
-			if !deleted {
-				fmt.Println("Can't find client ", toRemove, "in current connections:\n", clientAddresses)
+			break
+
+		case parser.AddConn.FullCommand():
+
+			go func() {
+				client, err := commands.GetClient(*parser.AddConnHost,
+					*parser.AddConnName,
+					*parser.AddConnPass,
+					*parser.AddConnWithPass,
+					&waitGroup)
+
+				if err != nil {
+					log.Println(err)
+				} else {
+					clients = append(clients, client)
+					log.Println("Successfully connected ", client.User())
+				}
+			}()
+
+			break
+
+		case parser.StartTransmitting.FullCommand():
+
+			// Todo ask if we want to await for connections
+
+			if len(clients) > 0 {
+				commands.StartTranslate(clients)
 			}
 
+			break
+
+		////////////////////////
+		// ONLY FOR DEBUG
+		////////////////////////
+		case parser.Debug.FullCommand():
+			//config, _ := keys.GetPasswordConfig("iu8_82_14", "1qazXSW@")
+			//sessions = append(sessions, "185.20.227.83:2222")
+			//commands.StartTranslate(sessions, config)
+		}
+	}
+}
+
+func closeConn(client *ssh.Client) {
+	err := client.Close()
+	if err != nil {
+		log.Println(err)
+	}
+
+	for i := 0; i < len(clients); i++ {
+		if clients[i] == client {
+			clients = append(clients[:i], clients[i+1:]...)
+			log.Println("Closed connection with ", client.User())
 			break
 		}
 	}

@@ -13,7 +13,7 @@ var (
 	AddConn         = App.Command("conn", "Adds a new connection to ssh-server")
 	AddConnHost     = AddConn.Arg("Host", "Address to SSH-server").Required().String()
 	AddConnName     = AddConn.Arg("Name", "Your login").Default("Ksusha").String()
-	AddConnWithPass = AddConn.Flag("withPass", "Should we use password instead ssh keyes").Default("false").Bool()
+	AddConnWithPass = AddConn.Flag("withPass", "Should we use password instead ssh keyes").Default("true").Bool()
 	AddConnPass     = AddConn.Arg("Pass", "Password to establish connection").Default("").String()
 
 	CloseConn     = App.Command("close", "Closes all existing connections")
