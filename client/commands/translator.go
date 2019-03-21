@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"../reader"
 	"fmt"
 	"golang.org/x/crypto/ssh"
 	"io"
@@ -22,9 +23,11 @@ func StartTranslate(clients []*ssh.Client) {
 	log.Println("Press Ctrl + C to exit from transmitting mode")
 
 	closeMap := make(map[*ssh.Client]func())
+	inChannel := make(chan []byte)
+	// outChannel := make(chan [] byte)
 
 	for _, client := range clients {
-		go func(item *ssh.Client) {
+		go func(item *ssh.Client, acceptChannel chan []byte) {
 			session, err := item.NewSession()
 			if err != nil {
 				fmt.Println("Can't start session ", item.User())
@@ -73,15 +76,57 @@ func StartTranslate(clients []*ssh.Client) {
 			log.Println("Created connection on ", item.User())
 
 			closeMap[item] = func() {
-				session.Close()
-				stdin.Close()
+				err = session.Close()
+				if err != nil {
+					log.Println(err)
+				}
+
+				err = stdin.Close()
+				if err != nil {
+					log.Println(err)
+				}
 			}
 
-			go io.Copy(os.Stdout, stdout)
-			go io.Copy(os.Stdout, stdoutErr)
-			go io.Copy(stdin, os.Stdin)
+			go func() {
+				//_, err = io.Copy(os.Stdout, stdout)
+				//if err != nil{
+				//	log.Println("ERROR", err)
+				//}
+				for {
+					buffer := make([]byte, 32*1024)
+					_, err := stdout.Read(buffer)
+					if err != nil {
+						log.Println(err)
+						return
+					}
 
-		}(client)
+					os.Stdout.Write(buffer)
+					//_, err = fmt.Fprintln(os.Stdout, item.User(), "\n", string(buffer), "\n")
+					//if err != nil{
+					//	log.Println(err)
+					//	return
+					//}
+				}
+			}()
+
+			go func() {
+				_, err = io.Copy(os.Stderr, stdoutErr)
+				if err != nil {
+					log.Println("ERROR", err)
+				}
+
+			}()
+
+			go func() {
+				for {
+					select {
+					case text := <-acceptChannel:
+						stdin.Write(text)
+					}
+				}
+			}()
+
+		}(client, inChannel)
 	}
 
 	escape := make(chan os.Signal, 1)
@@ -96,7 +141,8 @@ func StartTranslate(clients []*ssh.Client) {
 			}
 
 		default:
-
+			line := reader.ReadBytes()
+			inChannel <- line
 		}
 	}
 }
