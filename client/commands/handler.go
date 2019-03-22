@@ -6,7 +6,6 @@ import (
 	"log"
 	"strings"
 	"sync"
-	"time"
 )
 
 func GetClient(host, login, password string, isPass bool, sync *sync.WaitGroup) (*ssh.Client, error) {
@@ -25,15 +24,14 @@ func GetClient(host, login, password string, isPass bool, sync *sync.WaitGroup) 
 	}
 
 	// DEBUG ONLY
-	time.Sleep(2 * time.Second)
+	// time.Sleep(2 * time.Second)
 
 	client, err := ssh.Dial("tcp", host, config)
-
 	if err != nil {
 		log.Println(err)
-	} else {
-		log.Println("Successfully connected - ", host)
+		return nil, err
 	}
 
+	log.Println("Successfully connected - ", host)
 	return client, nil
 }

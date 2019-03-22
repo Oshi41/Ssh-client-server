@@ -78,7 +78,6 @@ func main() {
 					log.Println(err)
 				} else {
 					clients = append(clients, client)
-					log.Println("Successfully connected ", client.User())
 				}
 			}()
 
