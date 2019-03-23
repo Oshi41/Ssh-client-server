@@ -102,32 +102,30 @@ func writeToOutput(clients []*connectedClient) {
 
 // асинхронно передаю команды
 func translate(clients []*connectedClient, line string) {
-
-	cond := sync.NewCond(&sync.Mutex{})
-
 	timeNow := time.Now()
 
 	translateAsync := func(in io.WriteCloser,
 		line string,
 		now *time.Time,
-		c *sync.Cond) {
+		flag chan int) {
 
-		//c.L.Lock()
-		//defer c.L.Unlock()
-		//c.Wait()
-
-		io.WriteString(in, line)
-		log.Println(time.Since(*now).Nanoseconds()/1000, "mks")
+		// Ожидаем получения сигнала от канала
+		// Все потоки стартуют одновременно
+		select {
+		case <-flag:
+			io.WriteString(in, line)
+			log.Println(time.Since(*now).Nanoseconds()/1000, "mks")
+		}
 	}
+
+	flag := make(chan int)
 
 	for _, client := range clients {
-		go translateAsync(client.stdin, line, &timeNow, cond)
+		go translateAsync(client.stdin, line, &timeNow, flag)
 	}
 
-	//cond.L.Lock()
-	//timeNow = time.Now()
-	//cond.Broadcast()
-	//cond.L.Unlock()
+	// При закрытии потока все должны выолняться одновременно
+	close(flag)
 }
 
 // Создаю подклчюение и заполняю данными
@@ -183,16 +181,3 @@ func createConnection(client *ssh.Client) (*connectedClient, error) {
 		},
 	}, nil
 }
-
-//func startTranslateInner(clients []*ssh.Client) {
-//	clearTerminal()
-//	println("Press Ctrl + C to exit from transmitting mode")
-//
-//	connections := openSessions(clients)
-//
-//	// Копирую вывод в консоль
-//	// TODO было бы круто сделать distinct вывод соощбений,а не вываливать все подряд
-//	for _, session := range connections {
-//		go io.Copy(os.Stdout, session.stdout)
-//		go io.Copy(os.Stdout, session.stdoutErr)
-//	}
