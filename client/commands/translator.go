@@ -114,7 +114,7 @@ func translate(clients []*connectedClient, line string) {
 		select {
 		case <-flag:
 			io.WriteString(in, line)
-			log.Println(time.Since(*now).Nanoseconds()/1000, "mks")
+			// log.Println(time.Since(*now).Nanoseconds()/1000, "mks")
 		}
 	}
 
